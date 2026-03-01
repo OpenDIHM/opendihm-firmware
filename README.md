@@ -1,2 +1,2 @@
-# opendihm-core
-The core application logic for the Open Digital In-line Holographical Microscope.
+# opendihm-firmware
+The core firmware for the Open Digital In-Line Holographical Microscope.
