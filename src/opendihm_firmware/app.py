@@ -42,8 +42,8 @@ async def capture_hologram(payload: CaptureRequest) -> Response:
     if img_data is None:
         raise HTTPException(status_code=500, detail="Failed to capture image via hardware.")
 
-    # Return as JPEG bytes stream
-    return Response(content=img_data, media_type="image/jpeg")
+    # Return as RAW DNG byte stream
+    return Response(content=img_data, media_type="application/octet-stream")
 
 
 def start_server() -> None:

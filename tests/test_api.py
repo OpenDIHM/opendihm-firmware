@@ -24,7 +24,7 @@ def test_capture_endpoint_mock() -> None:
     response = client.post("/capture", json={"z_metadata": 12.5})
 
     assert response.status_code == 200
-    assert response.headers["content-type"] == "image/jpeg"
+    assert response.headers["content-type"] == "application/octet-stream"
     assert b"MOCK_JPEG_IMAGE_DATA_WITH_Z=12.5" in response.content
 
     hardware.mock_mode = original_mode
