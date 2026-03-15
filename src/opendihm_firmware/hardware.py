@@ -6,7 +6,9 @@ Handles interactions with the laser GPIO and the camera module.
 
 import asyncio
 import logging
+import os
 import subprocess
+import uuid
 
 from gpiozero import LED  # type: ignore
 
@@ -61,9 +63,16 @@ class HardwareController:
         try:
             if not self.mock_mode:
                 # Use libcamera-still to capture image
+                # libcamera cannot encode DNG to stdout natively, it must wrap it in a file.
+                # Use /dev/shm/ temporary RAM disk to avoid SD card wear and slow I/O.
+
+                capture_id = str(uuid.uuid4())
+                jpg_path = f"/dev/shm/capture_{capture_id}.jpg"
+                dng_path = f"/dev/shm/capture_{capture_id}.dng"
+
                 # Options:
-                # -e dng : encode as RAW DNG
-                # Let's save to stdout (-) and return byte content.
+                # -e jpg : base encoding (required to generate the DNG sidecar)
+                # --raw : generate a sidecar DNG RAW file
                 # Dimensions: 3280x2464 (8MP)
                 cmd = [
                     "libcamera-still",
@@ -72,26 +81,40 @@ class HardwareController:
                     "--height",
                     "2464",
                     "--encoding",
-                    "dng",
-                    "--raw",  # Force RAW DNG output
+                    "jpg",  # Save JPG to trigger side-car execution
+                    "--raw",  # Force side-car RAW DNG output
                     "--shutter",
                     str(exposure_time_us),  # Manual exposure
                     "--awbgains",
                     "1.0,1.0",  # Fixed white balance
                     "--nopreview",
                     "-o",
-                    "-",  # output to stdout
+                    jpg_path,  # Write to RAM disk
                 ]
 
-                # Run capture subprocess blocks event loop without asyncio, using run_in_executor
+                # Run capture subprocess blocking event loop via run_in_executor
                 loop = asyncio.get_running_loop()
 
-                def run_capture() -> subprocess.CompletedProcess[bytes]:
-                    return subprocess.run(cmd, capture_output=True, check=True)
+                def run_capture() -> None:
+                    subprocess.run(cmd, capture_output=True, check=True)
+                    # Read the DNG payload into memory
+                    nonlocal image_data
+                    if os.path.exists(dng_path):
+                        with open(dng_path, "rb") as f:
+                            image_data = f.read()
 
-                result = await loop.run_in_executor(None, run_capture)
-                image_data = result.stdout
-                logger.info("Image captured successfully.")
+                    # Cleanup the RAM disk completely to preserve the Pi's 512MB RAM
+                    if os.path.exists(jpg_path):
+                        os.unlink(jpg_path)
+                    if os.path.exists(dng_path):
+                        os.unlink(dng_path)
+
+                await loop.run_in_executor(None, run_capture)
+
+                if image_data is not None:
+                    logger.info("Raw DNG Image captured successfully.")
+                else:
+                    logger.error("DNG output file was not found after capture!")
             else:
                 logger.info("Mock hardware: Simulating 800ms camera capture delay...")
                 await asyncio.sleep(0.8)

@@ -1,7 +1,7 @@
 """Tests for the Hardware Controller."""
 
 import subprocess
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock, mock_open, patch
 
 import pytest
 
@@ -14,11 +14,11 @@ async def test_hardware_controller_real_capture() -> None:
     with (
         patch("opendihm_firmware.hardware.LED") as mock_led,
         patch("opendihm_firmware.hardware.subprocess.run") as mock_run,
+        patch("opendihm_firmware.hardware.os.path.exists", return_value=True),
+        patch("opendihm_firmware.hardware.os.unlink") as mock_unlink,
+        patch("builtins.open", mock_open(read_data=b"REAL_IMAGE_DATA")),
     ):
-        # Setup mock subprocess output
-        mock_process = MagicMock()
-        mock_process.stdout = b"REAL_IMAGE_DATA"
-        mock_run.return_value = mock_process
+        mock_run.return_value = MagicMock()
 
         hw = HardwareController(mock_mode=False)
         result = await hw.pulse_laser_and_capture(z_metadata=5.0)
@@ -27,6 +27,7 @@ async def test_hardware_controller_real_capture() -> None:
         assert result == b"REAL_IMAGE_DATA"
         mock_led.assert_called_once()
         mock_run.assert_called_once()
+        assert mock_unlink.call_count == 2  # Unlinks both jpg and dng
 
         # Test subprocess exception handling
         mock_run.side_effect = subprocess.CalledProcessError(1, "cmd", stderr=b"error")
