@@ -33,8 +33,10 @@ fi
 cd "$HOME/opendihm-firmware"
 
 echo "[*] Creating virtual environment and installing dependencies..."
-# Create a venv, download Python 3.11 if missing via uv, and install packages
-uv venv
+# Create a venv if it doesn't exist, download Python 3.11 if missing via uv, and install packages
+if [ ! -d ".venv" ]; then
+    uv venv
+fi
 source .venv/bin/activate
 uv pip install -e ".[dev]"
 
