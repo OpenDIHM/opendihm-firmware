@@ -57,7 +57,7 @@ class HardwareController:
 
         try:
             if not self.mock_mode:
-                # Use rpicam-still to capture image
+                # Use libcamera-still to capture image
                 # Options:
                 # -e jpg : encode as JPEG
                 # -r : include raw (if RAW is needed, adjust.
@@ -65,7 +65,7 @@ class HardwareController:
                 # Let's save to stdout (-) and return byte content.
                 # Dimensions: 3280x2464 (8MP)
                 cmd = [
-                    "rpicam-still",
+                    "libcamera-still",
                     "--width",
                     "3280",
                     "--height",
