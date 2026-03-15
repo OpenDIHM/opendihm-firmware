@@ -35,6 +35,8 @@ class HardwareController:
         else:
             self.laser = None
 
+        self.preview_process: subprocess.Popen[bytes] | None = None
+
     async def pulse_laser_and_capture(
         self, z_metadata: float, exposure_time_us: int = 10000
     ) -> bytes | None:
@@ -102,3 +104,68 @@ class HardwareController:
             logger.info("Laser OFF.")
 
         return image_data
+
+    async def start_preview(self, width: int = 1920, height: int = 1080, fps: int = 30) -> bool:
+        """
+        Starts the real-time sample alignment preview stream using libcamera-vid.
+        The stream listens on TCP port 8888 by default, which can be wrapped
+        into RTSP via MediaMTX or read directly.
+        """
+        if self.preview_process and self.preview_process.poll() is None:
+            logger.warning("Preview is already running.")
+            return True
+
+        if not self.mock_mode and self.laser:
+            self.laser.on()
+
+        logger.info("Starting preview stream...")
+
+        if not self.mock_mode:
+            cmd = [
+                "libcamera-vid",
+                "-t",
+                "0",  # Run indefinitely
+                "--inline",  # Required for streaming
+                "--listen",  # Listen for incoming TCP connection
+                "-o",
+                "tcp://0.0.0.0:8888",
+                "--width",
+                str(width),
+                "--height",
+                str(height),
+                "--framerate",
+                str(fps),
+                "--nopreview",
+            ]
+            try:
+                self.preview_process = subprocess.Popen(
+                    cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
+                )
+                logger.info("libcamera-vid preview process started.")
+                return True
+            except Exception as e:
+                logger.error(f"Failed to start preview stream: {e}")
+                if self.laser:
+                    self.laser.off()
+                return False
+        else:
+            logger.info("Mock hardware: Simulated preview stream started.")
+            return True
+
+    async def stop_preview(self) -> bool:
+        """Stops the real-time preview stream."""
+        logger.info("Stopping preview stream...")
+
+        if not self.mock_mode and self.laser:
+            self.laser.off()
+
+        if self.preview_process:
+            self.preview_process.terminate()
+            try:
+                self.preview_process.wait(timeout=2)
+            except subprocess.TimeoutExpired:
+                self.preview_process.kill()
+            self.preview_process = None
+            logger.info("Preview process terminated.")
+
+        return True

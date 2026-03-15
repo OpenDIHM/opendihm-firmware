@@ -46,6 +46,22 @@ async def capture_hologram(payload: CaptureRequest) -> Response:
     return Response(content=img_data, media_type="application/octet-stream")
 
 
+@app.post("/preview/start")
+async def start_preview() -> dict[str, str]:
+    """Starts the real-time sample alignment RTSP-capable preview stream."""
+    success = await hardware.start_preview()
+    if not success:
+        raise HTTPException(status_code=500, detail="Failed to start preview stream.")
+    return {"status": "started", "port": "8888"}
+
+
+@app.post("/preview/stop")
+async def stop_preview() -> dict[str, str]:
+    """Stops the real-time preview stream."""
+    await hardware.stop_preview()
+    return {"status": "stopped"}
+
+
 def start_server() -> None:
     """Helper method to start the uvicorn server directly."""
     import uvicorn

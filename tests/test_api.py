@@ -33,7 +33,7 @@ def test_capture_endpoint_mock() -> None:
 def test_capture_endpoint_fail() -> None:
     """Test the /capture endpoint when hardware fails."""
     from unittest.mock import patch
-    
+
     with patch.object(hardware, "pulse_laser_and_capture", return_value=None):
         response = client.post("/capture", json={"z_metadata": 10.0})
         assert response.status_code == 500
@@ -44,3 +44,37 @@ def test_capture_endpoint_invalid() -> None:
     """Test the /capture endpoint with invalid payload."""
     response = client.post("/capture", json={"wrong": "payload"})
     assert response.status_code == 422  # Unprocessable Entity (ValidationError)
+
+
+def test_preview_start_mock() -> None:
+    """Test starting the preview stream."""
+    original_mode = hardware.mock_mode
+    hardware.mock_mode = True
+
+    response = client.post("/preview/start")
+    assert response.status_code == 200
+    assert response.json() == {"status": "started", "port": "8888"}
+
+    hardware.mock_mode = original_mode
+
+
+def test_preview_start_fail() -> None:
+    """Test preview stream start failure."""
+    from unittest.mock import patch
+
+    with patch.object(hardware, "start_preview", return_value=False):
+        response = client.post("/preview/start")
+        assert response.status_code == 500
+        assert response.json() == {"detail": "Failed to start preview stream."}
+
+
+def test_preview_stop_mock() -> None:
+    """Test stopping the preview stream."""
+    original_mode = hardware.mock_mode
+    hardware.mock_mode = True
+
+    response = client.post("/preview/stop")
+    assert response.status_code == 200
+    assert response.json() == {"status": "stopped"}
+
+    hardware.mock_mode = original_mode
