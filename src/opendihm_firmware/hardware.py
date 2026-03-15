@@ -36,6 +36,7 @@ class HardwareController:
             self.laser = None
 
         self.preview_process: subprocess.Popen[bytes] | None = None
+        self.mock_server: asyncio.AbstractServer | None = None
 
     async def pulse_laser_and_capture(
         self, z_metadata: float, exposure_time_us: int = 10000
@@ -150,6 +151,18 @@ class HardwareController:
                 return False
         else:
             logger.info("Mock hardware: Simulated preview stream started.")
+            if self.mock_server is None:
+
+                async def handle_client(
+                    reader: asyncio.StreamReader, writer: asyncio.StreamWriter
+                ) -> None:
+                    pass
+
+                try:
+                    self.mock_server = await asyncio.start_server(handle_client, "0.0.0.0", 8888)
+                except Exception as e:
+                    logger.error(f"Failed to start mock server: {e}")
+                    return False
             return True
 
     async def stop_preview(self) -> bool:
@@ -167,5 +180,11 @@ class HardwareController:
                 self.preview_process.kill()
             self.preview_process = None
             logger.info("Preview process terminated.")
+
+        if self.mock_server:
+            self.mock_server.close()
+            await self.mock_server.wait_closed()
+            self.mock_server = None
+            logger.info("Mock preview server stopped.")
 
         return True
