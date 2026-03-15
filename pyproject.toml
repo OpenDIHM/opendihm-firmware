@@ -8,6 +8,7 @@ dependencies = [
     "fastapi>=0.110.0",
     "uvicorn>=0.29.0",
     "gpiozero>=2.0.0",
+    "rpi-lgpio>=0.6; sys_platform == 'linux'",
 ]
 
 [project.optional-dependencies]
