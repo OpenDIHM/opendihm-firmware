@@ -8,7 +8,9 @@ and the RTSP/TCP preview stream listeners are working correctly either locally
 """
 
 import argparse
+import os
 import socket
+import subprocess
 import sys
 import time
 
@@ -122,20 +124,64 @@ def main() -> None:
         default=8888,
         help="TCP Stream port used by libcamera-vid (default: 8888)",
     )
+    parser.add_argument(
+        "--auto-start",
+        action="store_true",
+        help="Automatically start the uvicorn mock server locally before testing",
+    )
 
     args = parser.parse_args()
 
     base_url = f"http://{args.host}:{args.port}"
-    print("=== OpenDIHM Firmware Integration Tests ===")
-    print(f"Targeting HTTP API: {base_url}")
-    print(f"Targeting Preview Stream: tcp://{args.host}:{args.preview_port}")
-    print("===========================================")
+    server_process = None
 
-    test_root(base_url)
-    test_capture(base_url)
-    test_preview_lifecycle(base_url, args.host, args.preview_port)
+    if args.auto_start:
+        print("[*] Starting local mock uvicorn server...")
+        env = os.environ.copy()
+        env["OPENDIHM_DEBUG"] = "true"
+        server_process = subprocess.Popen(
+            [
+                "uv",
+                "run",
+                "uvicorn",
+                "opendihm_firmware.app:app",
+                "--host",
+                args.host,
+                "--port",
+                str(args.port),
+            ],
+            env=env,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
 
-    print("\nIntegration test suite passed successfully!")
+        # Wait for the server to be responsive
+        print(f"[*] Waiting for server to become accessible at {args.host}:{args.port}...")
+        if not wait_for_tcp_port(args.host, args.port, timeout=10.0):
+            print("FAILED to reach the local server within timeout.")
+            server_process.kill()
+            sys.exit(1)
+        print("[*] Server is up and running.")
+
+    try:
+        print("=== OpenDIHM Firmware Integration Tests ===")
+        print(f"Targeting HTTP API: {base_url}")
+        print(f"Targeting Preview Stream: tcp://{args.host}:{args.preview_port}")
+        print("===========================================")
+
+        test_root(base_url)
+        test_capture(base_url)
+        test_preview_lifecycle(base_url, args.host, args.preview_port)
+
+        print("\nIntegration test suite passed successfully!")
+    finally:
+        if server_process:
+            print("\n[*] Stopping local mock server...")
+            server_process.terminate()
+            try:
+                server_process.wait(timeout=3.0)
+            except subprocess.TimeoutExpired:
+                server_process.kill()
 
 
 if __name__ == "__main__":
