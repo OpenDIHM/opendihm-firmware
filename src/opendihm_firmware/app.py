@@ -4,18 +4,38 @@ FastAPI application for OpenDIHM.
 Provides HTTP/REST endpoints for controlling the microscope.
 """
 
+import asyncio
 import os
+from collections.abc import AsyncGenerator
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException, Response
 from pydantic import BaseModel
 
+from opendihm_firmware.ble_server import BLEConfigServer
 from opendihm_firmware.hardware import HardwareController
-
-app = FastAPI(title="OpenDIHM Firmware API")
 
 # Initialize hardware controller depending on debug env flag
 mock_mode = os.environ.get("OPENDIHM_DEBUG", "false").lower() == "true"
 hardware = HardwareController(mock_mode=mock_mode)
+ble_server = BLEConfigServer(mock_mode=mock_mode)
+
+
+@asynccontextmanager
+async def lifespan(application: FastAPI) -> AsyncGenerator[None, None]:
+    """Manage the application lifespan, including BLE server lifecycle."""
+    # Start BLE server as a background task alongside the HTTP API
+    ble_task = asyncio.create_task(ble_server.start())
+    yield
+    # Shutdown: Cancel the background BLE task gracefully when uvicorn stops
+    ble_task.cancel()
+    try:
+        await ble_task
+    except asyncio.CancelledError:
+        pass
+
+
+app = FastAPI(title="OpenDIHM Firmware API", lifespan=lifespan)
 
 
 class CaptureRequest(BaseModel):

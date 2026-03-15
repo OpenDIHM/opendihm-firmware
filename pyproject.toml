@@ -9,6 +9,7 @@ dependencies = [
     "uvicorn>=0.29.0",
     "gpiozero>=2.0.0",
     "rpi-lgpio>=0.6; sys_platform == 'linux'",
+    "bless>=0.2.6",
 ]
 
 [project.optional-dependencies]
