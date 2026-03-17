@@ -86,7 +86,7 @@ def start_server() -> None:
     """Helper method to start the uvicorn server directly."""
     import uvicorn
 
-    host = os.environ.get("OPENDIHM_HOST", "0.0.0.0")
+    host = os.environ.get("OPENDIHM_HOST", "::")
     port = int(os.environ.get("OPENDIHM_PORT", "8000"))
     uvicorn.run("opendihm_firmware.app:app", host=host, port=port, reload=mock_mode)
 

@@ -152,13 +152,17 @@ class HardwareController:
                 "--inline",  # Required for streaming
                 "--listen",  # Listen for incoming TCP connection
                 "-o",
-                "tcp://0.0.0.0:8888",
+                "tcp://:8888",
                 "--width",
                 str(width),
                 "--height",
                 str(height),
                 "--framerate",
                 str(fps),
+                "--profile",
+                "baseline",
+                "--intra",
+                "30",
                 "--nopreview",
             ]
             try:
