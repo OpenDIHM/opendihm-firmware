@@ -75,7 +75,7 @@ class HardwareController:
                 # --raw : generate a sidecar DNG RAW file
                 # Dimensions: 3280x2464 (8MP)
                 cmd = [
-                    "libcamera-still",
+                    "rpicam-still",
                     "--width",
                     "3280",
                     "--height",
@@ -146,7 +146,7 @@ class HardwareController:
 
         if not self.mock_mode:
             cmd = [
-                "libcamera-vid",
+                "rpicam-vid",
                 "-t",
                 "0",  # Run indefinitely
                 "--inline",  # Required for streaming
