@@ -1,11 +1,18 @@
 #!/usr/bin/env bash
 
 # Sync script for OpenDIHM firmware
-# Syncs current workspace to the Raspberry Pi (localserver)
+# Syncs current workspace to the Raspberry Pi
 
 set -euo pipefail
 
-DEST="localserver:~/opendihm-firmware/"
+SERVER_NAME="${1}"
+
+if [ -z "${SERVER_NAME}" ]; then
+    echo "Usage: $0 <server_name>"
+    exit 1
+fi
+
+DEST="${SERVER_NAME}:~/opendihm-firmware/"
 SRC="$(dirname "$0")/../"
 
 echo "Syncing ${SRC} to ${DEST}..."
