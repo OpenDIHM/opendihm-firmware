@@ -46,20 +46,20 @@ class BLEConfigServer:
         # Flag to indicate if we've successfully connected so we can stop the server
         self.connected_to_wifi = False
 
-    def setup(self) -> None:
+    async def setup(self) -> None:
         """Configures the BLE services and characteristics."""
         assert self.server is not None
         logger.info(f"Setting up BLE Server with UUID {SERVICE_UUID}")
 
         # Add the primary configuration service
-        self.server.add_new_service(SERVICE_UUID)
+        await self.server.add_new_service(SERVICE_UUID)
 
         # Wi-Fi Credentials Characteristic (Write Only)
         # Expected JSON: {"ssid": "Your Network", "pwd": "Your Password"}
         char_flags = GATTCharacteristicProperties.write
         permissions = GATTAttributePermissions.writeable
 
-        self.server.add_new_characteristic(
+        await self.server.add_new_characteristic(
             SERVICE_UUID,
             WIFI_CHAR_UUID,
             char_flags,
@@ -71,7 +71,7 @@ class BLEConfigServer:
         status_flags = GATTCharacteristicProperties.read | GATTCharacteristicProperties.notify
         status_permissions = GATTAttributePermissions.readable
 
-        self.server.add_new_characteristic(
+        await self.server.add_new_characteristic(
             SERVICE_UUID,
             STATUS_CHAR_UUID,
             status_flags,
@@ -168,7 +168,7 @@ class BLEConfigServer:
         # Lazily create BlessServer here, inside the running asyncio event loop.
         # bless/CoreBluetooth requires an active loop at construction time.
         self.server = BlessServer(name=DEVICE_NAME)
-        self.setup()
+        await self.setup()
         await self.server.start()
         logger.info(f"Advertising {DEVICE_NAME} BLE Server...")
 
