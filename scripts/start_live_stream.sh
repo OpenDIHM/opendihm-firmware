@@ -34,6 +34,8 @@ fi
 echo "[*] Stream enabled successfully."
 
 if command -v ffplay &> /dev/null; then
+    echo "[*] Waiting for camera ISP to initialize (3 seconds)..."
+    sleep 3
     echo "[*] Spawning ffplay video viewer..."
     # -x 1280 -y 720 scales the display down so it fits gracefully on Mac screens
     # -fast and -fflags nobuffer reduce streaming latencies

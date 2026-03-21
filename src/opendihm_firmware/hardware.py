@@ -152,7 +152,7 @@ class HardwareController:
                 "--inline",  # Required for streaming
                 "--listen",  # Listen for incoming TCP connection
                 "-o",
-                "tcp://:8888",
+                "tcp://0.0.0.0:8888",
                 "--width",
                 str(width),
                 "--height",
@@ -167,10 +167,24 @@ class HardwareController:
             ]
             try:
                 self.preview_process = subprocess.Popen(
-                    cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
+                    cmd, stdout=subprocess.DEVNULL
                 )
-                logger.info("libcamera-vid preview process started.")
-                return True
+                logger.info("libcamera-vid preview process started. Waiting for TCP socket...")
+                
+                # Wait up to 5 seconds for the port to open without connecting to it
+                for _ in range(50):
+                    if self.preview_process.poll() is not None:
+                        logger.error("Preview process exited prematurely.")
+                        return False
+                        
+                    result = subprocess.run(["ss", "-tln"], capture_output=True, text=True)
+                    if ":8888" in result.stdout:
+                        logger.info("TCP port 8888 is now listening.")
+                        return True
+                    await asyncio.sleep(0.1)
+                    
+                logger.error("Timeout waiting for preview stream port 8888.")
+                return False
             except Exception as e:
                 logger.error(f"Failed to start preview stream: {e}")
                 if self.laser:

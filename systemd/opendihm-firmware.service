@@ -6,7 +6,7 @@ After=network.target
 Type=simple
 User=opendihm
 Group=opendihm
-WorkingDirectory=/opt/opendihm
+WorkingDirectory=/tmp
 Environment=PYTHONPATH=/opt/opendihm/src
 ExecStart=/opt/opendihm/.venv/bin/python -m uvicorn opendihm_firmware.app:app --host 0.0.0.0 --port 8000
 Restart=always
