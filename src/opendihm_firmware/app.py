@@ -92,8 +92,12 @@ def start_server() -> None:
     """Helper method to start the uvicorn server directly."""
     import uvicorn
 
+    # Listen on '::' (Dual-stack wildcard) to support both IPv4 and IPv6.
+    # This ensures iPhones resolving 'opendihm.local' to IPv6 can connect.
     host = os.environ.get("OPENDIHM_HOST", "::")
     port = int(os.environ.get("OPENDIHM_PORT", "8000"))
+    
+    print(f"Starting OpenDIHM Firmware API on http://{host}:{port}")
     uvicorn.run("opendihm_firmware.app:app", host=host, port=port, reload=mock_mode)
 
 
