@@ -48,10 +48,15 @@ async def test_preview_start_stop_real() -> None:
     with (
         patch("opendihm_firmware.hardware.LED") as mock_led,
         patch("opendihm_firmware.hardware.subprocess.Popen") as mock_popen,
+        patch("opendihm_firmware.hardware.subprocess.run") as mock_run,
     ):
         mock_process = MagicMock()
         mock_process.poll.return_value = None
         mock_popen.return_value = mock_process
+        
+        mock_run_result = MagicMock()
+        mock_run_result.stdout = ":8888\n"
+        mock_run.return_value = mock_run_result
 
         hw = HardwareController(mock_mode=False)
 

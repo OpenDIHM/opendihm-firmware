@@ -82,6 +82,12 @@ async def stop_preview() -> dict[str, str]:
     return {"status": "stopped"}
 
 
+@app.get("/system/status")
+def system_status() -> dict[str, float | int | bool]:
+    """Returns the Raspberry Pi system and hardware status."""
+    return hardware.get_system_status()
+
+
 def start_server() -> None:
     """Helper method to start the uvicorn server directly."""
     import uvicorn

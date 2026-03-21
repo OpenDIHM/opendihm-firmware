@@ -39,9 +39,10 @@ class HardwareController:
 
         self.preview_process: subprocess.Popen[bytes] | None = None
         self.mock_server: asyncio.AbstractServer | None = None
+        self.exposure_time_us: int = 10000
 
     async def pulse_laser_and_capture(
-        self, z_metadata: float, exposure_time_us: int = 10000
+        self, z_metadata: float, exposure_time_us: int | None = None
     ) -> bytes | None:
         """
         Pulsing logic for holography capture.
@@ -84,7 +85,7 @@ class HardwareController:
                     "jpg",  # Save JPG to trigger side-car execution
                     "--raw",  # Force side-car RAW DNG output
                     "--shutter",
-                    str(exposure_time_us),  # Manual exposure
+                    str(exposure_time_us or self.exposure_time_us),  # Manual exposure
                     "--awbgains",
                     "1.0,1.0",  # Fixed white balance
                     "--nopreview",
@@ -144,67 +145,71 @@ class HardwareController:
 
         logger.info("Starting preview stream...")
 
-        if not self.mock_mode:
-            cmd = [
-                "rpicam-vid",
-                "-t",
-                "0",  # Run indefinitely
-                "--inline",  # Required for streaming
-                "--listen",  # Listen for incoming TCP connection
-                "-o",
-                "tcp://0.0.0.0:8888",
-                "--width",
-                str(width),
-                "--height",
-                str(height),
-                "--framerate",
-                str(fps),
-                "--profile",
-                "baseline",
-                "--intra",
-                "30",
-                "--nopreview",
-            ]
+        if self.mock_mode:
+            return await self._start_mock_preview()
+
+        return await self._start_real_preview(width, height, fps)
+
+    async def _start_mock_preview(self) -> bool:
+        logger.info("Mock hardware: Simulated preview stream started.")
+        if self.mock_server is None:
+            async def handle_client(
+                reader: asyncio.StreamReader, writer: asyncio.StreamWriter
+            ) -> None:
+                pass
             try:
-                self.preview_process = subprocess.Popen(
-                    cmd, stdout=subprocess.DEVNULL
-                )
-                logger.info("libcamera-vid preview process started. Waiting for TCP socket...")
-                
-                # Wait up to 5 seconds for the port to open without connecting to it
-                for _ in range(50):
-                    if self.preview_process.poll() is not None:
-                        logger.error("Preview process exited prematurely.")
-                        return False
-                        
-                    result = subprocess.run(["ss", "-tln"], capture_output=True, text=True)
-                    if ":8888" in result.stdout:
-                        logger.info("TCP port 8888 is now listening.")
-                        return True
-                    await asyncio.sleep(0.1)
-                    
-                logger.error("Timeout waiting for preview stream port 8888.")
-                return False
+                self.mock_server = await asyncio.start_server(handle_client, "0.0.0.0", 8888)
             except Exception as e:
-                logger.error(f"Failed to start preview stream: {e}")
-                if self.laser:
-                    self.laser.off()
+                logger.error(f"Failed to start mock server: {e}")
                 return False
-        else:
-            logger.info("Mock hardware: Simulated preview stream started.")
-            if self.mock_server is None:
+        return True
 
-                async def handle_client(
-                    reader: asyncio.StreamReader, writer: asyncio.StreamWriter
-                ) -> None:
-                    pass
+    async def _start_real_preview(self, width: int, height: int, fps: int) -> bool:
+        cmd = [
+            "rpicam-vid",
+            "-t",
+            "0",  # Run indefinitely
+            "--inline",  # Required for streaming
+            "--listen",  # Listen for incoming TCP connection
+            "-o",
+            "tcp://0.0.0.0:8888",
+            "--width",
+            str(width),
+            "--height",
+            str(height),
+            "--framerate",
+            str(fps),
+            "--profile",
+            "baseline",
+            "--intra",
+            "30",
+            "--nopreview",
+        ]
+        try:
+            self.preview_process = subprocess.Popen(
+                cmd, stdout=subprocess.DEVNULL
+            )
+            logger.info("libcamera-vid preview process started. Waiting for TCP socket...")
 
-                try:
-                    self.mock_server = await asyncio.start_server(handle_client, "0.0.0.0", 8888)
-                except Exception as e:
-                    logger.error(f"Failed to start mock server: {e}")
+            # Wait up to 5 seconds for the port to open without connecting to it
+            for _ in range(50):
+                if self.preview_process.poll() is not None:
+                    logger.error("Preview process exited prematurely.")
                     return False
-            return True
+
+                result = subprocess.run(["ss", "-tln"], capture_output=True, text=True)
+                if ":8888" in result.stdout:
+                    logger.info("TCP port 8888 is now listening.")
+                    return True
+                await asyncio.sleep(0.1)
+
+            logger.error("Timeout waiting for preview stream port 8888.")
+            return False
+        except Exception as e:
+            logger.error(f"Failed to start preview stream: {e}")
+            if self.laser:
+                self.laser.off()
+            return False
 
     async def stop_preview(self) -> bool:
         """Stops the real-time preview stream."""
@@ -229,3 +234,71 @@ class HardwareController:
             logger.info("Mock preview server stopped.")
 
         return True
+
+    def get_system_status(self) -> dict[str, float | int | bool]:
+        """Returns hardware system status metrics."""
+        status: dict[str, float | int | bool] = {
+            "temperature_c": 0.0,
+            "wifi_signal_dbm": 0,
+            "laser_on": False,
+            "exposure_time_us": self.exposure_time_us,
+            "storage_left_bytes": 0,
+            "memory_left_bytes": 0,
+        }
+
+        if self.mock_mode:
+            status.update({
+                "temperature_c": 45.0,
+                "wifi_signal_dbm": -50,
+                "storage_left_bytes": 10 * 1024 * 1024 * 1024,
+                "memory_left_bytes": 256 * 1024 * 1024,
+            })
+            return status
+
+        status["temperature_c"] = self._get_temperature()
+        status["wifi_signal_dbm"] = self._get_wifi_signal()
+        status["storage_left_bytes"] = self._get_storage_left()
+        status["memory_left_bytes"] = self._get_memory_left()
+
+        if self.laser:
+            status["laser_on"] = self.laser.is_active
+
+        return status
+
+    def _get_temperature(self) -> float:
+        try:
+            with open("/sys/class/thermal/thermal_zone0/temp") as f:
+                return int(f.read().strip()) / 1000.0
+        except Exception:
+            return 0.0
+
+    def _get_wifi_signal(self) -> float:
+        try:
+            with open("/proc/net/wireless") as f:
+                lines = f.readlines()
+                if len(lines) > 2:
+                    for line in lines[2:]:
+                        parts = line.split()
+                        if "wlan" in parts[0]:
+                            return float(parts[3].replace('.', ''))
+        except Exception:
+            pass
+        return 0.0
+
+    def _get_storage_left(self) -> int:
+        try:
+            import shutil
+            return shutil.disk_usage("/").free
+        except Exception:
+            return 0
+
+    def _get_memory_left(self) -> int:
+        try:
+            with open("/proc/meminfo") as f:
+                for line in f:
+                    if line.startswith("MemAvailable:"):
+                        return int(line.split()[1]) * 1024
+        except Exception:
+            pass
+        return 0
+
