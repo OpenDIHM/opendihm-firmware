@@ -153,10 +153,12 @@ class HardwareController:
     async def _start_mock_preview(self) -> bool:
         logger.info("Mock hardware: Simulated preview stream started.")
         if self.mock_server is None:
+
             async def handle_client(
                 reader: asyncio.StreamReader, writer: asyncio.StreamWriter
             ) -> None:
                 pass
+
             try:
                 self.mock_server = await asyncio.start_server(handle_client, "0.0.0.0", 8888)
             except Exception as e:
@@ -186,9 +188,7 @@ class HardwareController:
             "--nopreview",
         ]
         try:
-            self.preview_process = subprocess.Popen(
-                cmd, stdout=subprocess.DEVNULL
-            )
+            self.preview_process = subprocess.Popen(cmd, stdout=subprocess.DEVNULL)
             logger.info("libcamera-vid preview process started. Waiting for TCP socket...")
 
             # Wait up to 5 seconds for the port to open without connecting to it
@@ -247,12 +247,14 @@ class HardwareController:
         }
 
         if self.mock_mode:
-            status.update({
-                "temperature_c": 45.0,
-                "wifi_signal_dbm": -50,
-                "storage_left_bytes": 10 * 1024 * 1024 * 1024,
-                "memory_left_bytes": 256 * 1024 * 1024,
-            })
+            status.update(
+                {
+                    "temperature_c": 45.0,
+                    "wifi_signal_dbm": -50,
+                    "storage_left_bytes": 10 * 1024 * 1024 * 1024,
+                    "memory_left_bytes": 256 * 1024 * 1024,
+                }
+            )
             return status
 
         status["temperature_c"] = self._get_temperature()
@@ -280,7 +282,7 @@ class HardwareController:
                     for line in lines[2:]:
                         parts = line.split()
                         if "wlan" in parts[0]:
-                            return float(parts[3].replace('.', ''))
+                            return float(parts[3].replace(".", ""))
         except Exception:
             pass
         return 0.0
@@ -288,6 +290,7 @@ class HardwareController:
     def _get_storage_left(self) -> int:
         try:
             import shutil
+
             return shutil.disk_usage("/").free
         except Exception:
             return 0
@@ -301,4 +304,3 @@ class HardwareController:
         except Exception:
             pass
         return 0
-
