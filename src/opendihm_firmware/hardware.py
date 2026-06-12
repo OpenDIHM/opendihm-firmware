@@ -39,6 +39,7 @@ class HardwareController:
 
         self.preview_process: subprocess.Popen[bytes] | None = None
         self.mock_server: asyncio.AbstractServer | None = None
+        self.preview_params: dict[str, int] = {"width": 1920, "height": 1080, "fps": 30}
         self.exposure_time_us: int = 10000
 
     async def pulse_laser_and_capture(
@@ -61,6 +62,12 @@ class HardwareController:
 
         image_data: bytes | None = None
 
+        # Stop preview if running — libcamera pipeline is exclusive
+        preview_was_running = self._preview_is_running()
+        if preview_was_running:
+            logger.info("Preview in progress; stopping it temporarily for capture.")
+            await self.stop_preview()
+
         try:
             if not self.mock_mode:
                 # Use libcamera-still to capture image
@@ -68,7 +75,7 @@ class HardwareController:
                 # Use /dev/shm/ temporary RAM disk to avoid SD card wear and slow I/O.
 
                 capture_id = str(uuid.uuid4())
-                jpg_path = f"/dev/shm/capture_{capture_id}.jpg"
+                primary_path = f"/dev/shm/capture_{capture_id}.jpg"
                 dng_path = f"/dev/shm/capture_{capture_id}.dng"
 
                 # Options:
@@ -90,7 +97,7 @@ class HardwareController:
                     "1.0,1.0",  # Fixed white balance
                     "--nopreview",
                     "-o",
-                    jpg_path,  # Write to RAM disk
+                    primary_path,  # Write to RAM disk
                 ]
 
                 # Run capture subprocess blocking event loop via run_in_executor
@@ -105,8 +112,8 @@ class HardwareController:
                             image_data = f.read()
 
                     # Cleanup the RAM disk completely to preserve the Pi's 512MB RAM
-                    if os.path.exists(jpg_path):
-                        os.unlink(jpg_path)
+                    if os.path.exists(primary_path):
+                        os.unlink(primary_path)
                     if os.path.exists(dng_path):
                         os.unlink(dng_path)
 
@@ -127,6 +134,10 @@ class HardwareController:
             if not self.mock_mode and self.laser:
                 self.laser.off()
             logger.info("Laser OFF.")
+            # Restart preview if it was running before capture
+            if preview_was_running:
+                logger.info("Restarting preview stream after capture.")
+                await self.start_preview(**self.preview_params)
 
         return image_data
 
@@ -143,6 +154,7 @@ class HardwareController:
         if not self.mock_mode and self.laser:
             self.laser.on()
 
+        self.preview_params.update(width=width, height=height, fps=fps)
         logger.info("Starting preview stream...")
 
         if self.mock_mode:
@@ -234,6 +246,12 @@ class HardwareController:
             logger.info("Mock preview server stopped.")
 
         return True
+
+    def _preview_is_running(self) -> bool:
+        """Check whether the real or mock preview stream is currently active."""
+        if self.mock_server is not None:
+            return True
+        return self.preview_process is not None and self.preview_process.poll() is None
 
     def get_system_status(self) -> dict[str, float | int | bool]:
         """Returns hardware system status metrics."""

@@ -27,7 +27,7 @@ async def test_hardware_controller_real_capture() -> None:
         assert result == b"REAL_IMAGE_DATA"
         mock_led.assert_called_once()
         mock_run.assert_called_once()
-        assert mock_unlink.call_count == 2  # Unlinks both jpg and dng
+        assert mock_unlink.call_count == 2  # Unlinks both primary and dng
 
         # Test subprocess exception handling
         mock_run.side_effect = subprocess.CalledProcessError(1, "cmd", stderr=b"error")
