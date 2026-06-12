@@ -68,6 +68,7 @@ EXCLUDES=(
     .mypy_cache
     .pytest_cache
     .ruff_cache
+    .opencode
     logs
     .DS_Store
 )
